@@ -6,6 +6,8 @@
     "openings:validate:strict": "node scripts/validate-eco-encyclopedia.mjs --strict",
     "openings:merge": "node scripts/merge-eco-library.mjs",
     "openings:merge:validate": "node scripts/merge-eco-library.mjs --validate",
+    "openings:wdl": "node scripts/generate-opening-explorer-wdl.mjs",
+    "openings:wdl:blend": "node scripts/generate-opening-explorer-wdl.mjs --replace-wdl --search-depth 8 --movetime 120 --hard-limit 260",
     "test:smoke": "node scripts/run-smoke-suite.mjs",
     "test:variants-ui": "node scripts/run-variant-ui-regression.mjs",
     "test:deep": "node scripts/run-smoke-suite.mjs",

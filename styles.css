@@ -1287,6 +1287,39 @@ body {
     background: linear-gradient(90deg, #5f6772, #2f3640);
 }
 
+.opening-cp-row {
+    display: grid;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.opening-cp-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 13px;
+}
+
+.opening-cp-track {
+    height: 8px;
+    border-radius: 999px;
+    overflow: hidden;
+    display: flex;
+}
+
+.opening-cp-fill {
+    display: block;
+    height: 100%;
+}
+
+.opening-cp-fill.white {
+    background: linear-gradient(90deg, #d8e8ff, #e8f4ff);
+}
+
+.opening-cp-fill.black {
+    background: linear-gradient(90deg, #3f4752, #2f3640);
+}
+
 .analysis-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 340px;

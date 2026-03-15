@@ -169,6 +169,7 @@
 			black: 0,
 			total: 0,
 			source: '',
+			cp: null,
 		};
 	}
 
@@ -184,6 +185,7 @@
 			black,
 			total,
 			source: String(safe.source || ''),
+			cp: safe.cp != null && isFinite(Number(safe.cp)) ? Number(safe.cp) : null,
 		};
 	}
 

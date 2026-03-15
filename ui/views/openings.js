@@ -535,6 +535,7 @@
 				renderStatChip('Family', entry.familyLabel || entry.family || '-'),
 				renderStatChip('WDL', entry.wdlSummary || formatWdlCompact(entry.wdl)),
 			];
+			if (entry.wdl && entry.wdl.cp != null) detailChips.push(renderStatChip('Eval', formatCpEval(entry.wdl.cp)));
 			if (recognized && recognized.key === entry.key) detailChips.push(renderStatChip('Current game', 'Matched'));
 
 			return [
@@ -705,6 +706,7 @@
 				renderWdlBar('Draw', safe.draws, safe.total, 'draw'),
 				renderWdlBar('Black', safe.black, safe.total, 'black'),
 				'</div>',
+				(wdl != null && wdl.cp != null && isFinite(Number(wdl.cp)) ? renderCpBar(Number(wdl.cp)) : ''),
 				'</div>',
 			].join('');
 		}
@@ -713,6 +715,27 @@
 			const percentText = formatPercent(value, total);
 			const width = total ? Math.max(0, Math.min(100, (Number(value) || 0) * 100 / total)) : 0;
 			return '<div class="opening-wdl-row"><div class="opening-wdl-head"><span>' + escapeHtml(label) + '</span><span>' + escapeHtml(percentText) + ' • ' + escapeHtml(String(Number(value) || 0)) + '</span></div><div class="opening-wdl-track"><span class="opening-wdl-fill ' + escapeHtml(tone) + '" style="width:' + String(width.toFixed(2)) + '%"></span></div></div>';
+		}
+
+		function formatCpEval(cp) {
+			if (cp == null || !isFinite(Number(cp))) return '?';
+			const pawns = Number(cp) / 100;
+			if (cp === 0) return '=';
+			return (cp > 0 ? '+' : '') + pawns.toFixed(2);
+		}
+
+		function renderCpBar(cp) {
+			const label = formatCpEval(cp);
+			const whitePct = Math.max(5, Math.min(95, 50 + cp / 6));
+			return [
+				'<div class="opening-cp-row">',
+				'<div class="opening-cp-head"><span>Engine eval</span><span>' + escapeHtml(label) + '</span></div>',
+				'<div class="opening-cp-track">',
+				'<span class="opening-cp-fill white" style="width:' + whitePct.toFixed(2) + '%"></span>',
+				'<span class="opening-cp-fill black" style="width:' + (100 - whitePct).toFixed(2) + '%"></span>',
+				'</div>',
+				'</div>',
+			].join('');
 		}
 
 		function renderMoveWdlStat(move) {

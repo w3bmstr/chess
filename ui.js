@@ -164,7 +164,6 @@ try {
         applyPieceSet('emoji', { skipRender: true });
 }
 
-
 function createPiece(fenChar) {
     const symbol = getPieceSymbol(fenChar);
     if (!symbol) return null;
@@ -206,6 +205,7 @@ let gameController = null;
 let diagnosticsPreview = null;
 let currentOpeningState = null;
 let requestedToolsPanel = 'perft';
+
 const PLAY_CONFIG = {
     humanColor: 'white',
     engineColor: 'black',
@@ -8053,11 +8053,15 @@ function ensureBoard3D() {
 
     if (!board3D) {
         try {
-            board3D = new window.Board3D(board3DContainer);
+            board3D = new window.Board3D(board3DContainer, { renderStyle: 'staunton' });
         } catch (error) {
             console.error('UI.js: failed to initialize 3D board.', error);
             board3D = null;
         }
+    }
+
+    if (board3D && typeof board3D.setRenderStyle === 'function') {
+        board3D.setRenderStyle('staunton');
     }
 
     return board3D;

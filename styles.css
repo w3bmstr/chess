@@ -2351,6 +2351,10 @@ body {
     border-radius: 6px;
     overflow: hidden;
     box-shadow: 0 6px 24px var(--board-shadow);
+    touch-action: none;
+    overscroll-behavior: contain;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 
@@ -2711,8 +2715,9 @@ body[data-piece-set="classic"] .piece {
         padding: 0 10px;
     }
     .board-ctrl-btn {
-        font-size: 13px;
-        padding: 8px 12px;
+        font-size: 14px;
+        min-height: 44px;
+        padding: 10px 14px;
     }
     .play-status {
         max-width: calc(100vw - 20px);
@@ -2733,7 +2738,7 @@ body[data-piece-set="classic"] .piece {
     }
 
     #board-wrapper {
-        width: 100%;
+        width: min(100%, calc(100vw - 14px));
     }
 
     .coords-left {
@@ -2750,6 +2755,8 @@ body[data-piece-set="classic"] .piece {
     #board-3d-container,
     .analysis-board {
         width: 100%;
+        max-width: min(100vw - 14px, 560px);
+        margin-inline: auto;
     }
 
 

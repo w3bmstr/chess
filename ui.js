@@ -117,6 +117,9 @@ function applyTheme(theme) {
 
     try { localStorage.setItem('bbjs-theme', theme); } catch(e) {}
 
+    // Notify renderers that rely on CSS variables (e.g. 3D background/squares).
+    window.dispatchEvent(new Event('chess2:theme-changed'));
+
     // Classic set uses theme-aware glyph mapping, so repaint when theme changes.
     if (currentPieceSet === 'classic') {
         if (currentGameState) {
@@ -205,6 +208,12 @@ let gameController = null;
 let diagnosticsPreview = null;
 let currentOpeningState = null;
 let requestedToolsPanel = 'perft';
+
+window.addEventListener('chess2:theme-changed', () => {
+    if (board3D && typeof board3D.refreshTheme === 'function') {
+        board3D.refreshTheme();
+    }
+});
 
 const PLAY_CONFIG = {
     humanColor: 'white',
@@ -8053,7 +8062,14 @@ function ensureBoard3D() {
 
     if (!board3D) {
         try {
-            board3D = new window.Board3D(board3DContainer, { renderStyle: 'staunton' });
+            board3D = new window.Board3D(board3DContainer, {
+                renderStyle: 'staunton',
+                onSquareClick(squareName) {
+                    handleBoardSquareClick(squareName).catch(error => {
+                        console.error('UI.js: failed to handle 3D square click.', error);
+                    });
+                },
+            });
         } catch (error) {
             console.error('UI.js: failed to initialize 3D board.', error);
             board3D = null;
@@ -8062,6 +8078,10 @@ function ensureBoard3D() {
 
     if (board3D && typeof board3D.setRenderStyle === 'function') {
         board3D.setRenderStyle('staunton');
+    }
+
+    if (board3D && typeof board3D.refreshTheme === 'function') {
+        board3D.refreshTheme();
     }
 
     return board3D;

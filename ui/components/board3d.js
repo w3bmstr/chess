@@ -36,6 +36,7 @@ class Board3D {
 
     constructor(container, options) {
         this.container = container;
+        this.onSquareClick = options && typeof options.onSquareClick === 'function' ? options.onSquareClick : null;
         this.scene = null;
         this.camera = null;
         this.renderer = null;
@@ -53,9 +54,13 @@ class Board3D {
 
         this.drag = false;
         this.prev = { x: 0, y: 0 };
+        this.dragMoved = false;
+        this.touchOrbitActive = false;
         this.orbit = { theta: Math.PI * 0.25, phi: Math.PI * 0.33 };
         this.flipped = false;
         this.camR = 13;
+        this.raycaster = null;
+        this.pointer = null;
 
         this._init();
     }
@@ -74,6 +79,8 @@ class Board3D {
         const THREE = window.THREE;
         const width = this.container.clientWidth || 600;
         const height = this.container.clientHeight || 600;
+        this.raycaster = new THREE.Raycaster();
+        this.pointer = new THREE.Vector2();
 
         this.scene = new THREE.Scene();
         this._updateSceneBg();
@@ -822,36 +829,106 @@ class Board3D {
 
     _bindEvents() {
         const el = this.renderer.domElement;
+
+        const midpoint = touches => {
+            if (!touches || touches.length < 2) return null;
+            return {
+                x: (touches[0].clientX + touches[1].clientX) / 2,
+                y: (touches[0].clientY + touches[1].clientY) / 2,
+            };
+        };
+
+        const resetTouchState = () => {
+            this.drag = false;
+            this.dragMoved = false;
+            this.touchOrbitActive = false;
+        };
+
         el.addEventListener('mousedown', event => {
             this.drag = true;
+            this.dragMoved = false;
             this.prev = { x: event.clientX, y: event.clientY };
         });
         window.addEventListener('mousemove', event => {
             if (!this.drag) return;
             const dx = event.clientX - this.prev.x;
             const dy = event.clientY - this.prev.y;
+            if (Math.abs(dx) + Math.abs(dy) > 2) this.dragMoved = true;
             this.orbit.theta -= dx * 0.012;
             this.orbit.phi = Math.max(0.18, Math.min(1.45, this.orbit.phi + dy * 0.012));
             this.prev = { x: event.clientX, y: event.clientY };
             this._applyOrbit();
         });
-        window.addEventListener('mouseup', () => { this.drag = false; });
+        window.addEventListener('mouseup', event => {
+            if (this.drag && !this.dragMoved) {
+                this._emitSquareClickAt(event.clientX, event.clientY);
+            }
+            this.drag = false;
+            this.dragMoved = false;
+            this.touchOrbitActive = false;
+        });
 
         el.addEventListener('touchstart', event => {
             this.drag = true;
-            this.prev = { x: event.touches[0].clientX, y: event.touches[0].clientY };
-        }, { passive: true });
+            this.dragMoved = false;
+            this.touchOrbitActive = event.touches.length >= 2;
+            if (this.touchOrbitActive) {
+                const mid = midpoint(event.touches);
+                if (mid) this.prev = mid;
+            } else {
+                this.prev = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+            }
+        }, { passive: false });
+
         el.addEventListener('touchmove', event => {
             if (!this.drag) return;
+
+            if (event.touches.length >= 2 || this.touchOrbitActive) {
+                const mid = midpoint(event.touches);
+                if (mid) {
+                    const dx = mid.x - this.prev.x;
+                    const dy = mid.y - this.prev.y;
+                    if (Math.abs(dx) + Math.abs(dy) > 2) this.dragMoved = true;
+                    this.touchOrbitActive = true;
+                    this.orbit.theta -= dx * 0.01;
+                    this.orbit.phi = Math.max(0.18, Math.min(1.45, this.orbit.phi + dy * 0.01));
+                    this.prev = mid;
+                    this._applyOrbit();
+                }
+                event.preventDefault();
+                return;
+            }
+
             const dx = event.touches[0].clientX - this.prev.x;
             const dy = event.touches[0].clientY - this.prev.y;
-            this.orbit.theta -= dx * 0.012;
-            this.orbit.phi = Math.max(0.18, Math.min(1.45, this.orbit.phi + dy * 0.012));
+            if (Math.abs(dx) + Math.abs(dy) > 12) this.dragMoved = true;
             this.prev = { x: event.touches[0].clientX, y: event.touches[0].clientY };
-            this._applyOrbit();
             event.preventDefault();
         }, { passive: false });
-        el.addEventListener('touchend', () => { this.drag = false; });
+
+        el.addEventListener('touchend', event => {
+            const touch = event.changedTouches && event.changedTouches[0] ? event.changedTouches[0] : null;
+            if (this.drag && !this.dragMoved && !this.touchOrbitActive && touch) {
+                this._emitSquareClickAt(touch.clientX, touch.clientY);
+            }
+
+            if (event.touches && event.touches.length) {
+                this.touchOrbitActive = event.touches.length >= 2;
+                if (this.touchOrbitActive) {
+                    const mid = midpoint(event.touches);
+                    if (mid) this.prev = mid;
+                } else {
+                    this.prev = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+                }
+                return;
+            }
+
+            resetTouchState();
+        });
+
+        el.addEventListener('touchcancel', () => {
+            resetTouchState();
+        });
 
         el.addEventListener('wheel', event => {
             this.camR = Math.max(7, Math.min(22, this.camR + event.deltaY * 0.02));
@@ -860,6 +937,25 @@ class Board3D {
         }, { passive: false });
 
         window.addEventListener('resize', () => this.resize());
+    }
+
+    _emitSquareClickAt(clientX, clientY) {
+        const square = this._pickSquareFromClientPoint(clientX, clientY);
+        if (!square || typeof this.onSquareClick !== 'function') return;
+        this.onSquareClick(square);
+    }
+
+    _pickSquareFromClientPoint(clientX, clientY) {
+        if (!this.raycaster || !this.pointer || !this.camera || !this.squareMeshes.length) return null;
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return null;
+        this.pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        this.pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+        this.raycaster.setFromCamera(this.pointer, this.camera);
+        const hits = this.raycaster.intersectObjects(this.squareMeshes, false);
+        if (!hits.length) return null;
+        const sqName = hits[0] && hits[0].object && hits[0].object.userData ? hits[0].object.userData.sqName : null;
+        return typeof sqName === 'string' ? sqName : null;
     }
 
     destroy() {

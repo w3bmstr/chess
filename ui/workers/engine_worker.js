@@ -50,18 +50,66 @@
         };
     }
 
-    function createWorkerEngineBridge() {
+    function createWorkerEngineBridge(options) {
         if (typeof global.Worker !== 'function') {
             throw new Error('Web Workers are not supported in this environment.');
         }
 
+        const opts = options || {};
+        const requestTimeoutMs = Math.max(1000, Number(opts.requestTimeoutMs) || 15000);
+        const goTimeoutMs = Math.max(requestTimeoutMs, Number(opts.goTimeoutMs) || 45000);
         const worker = new global.Worker('worker.js');
         let nextRequestId = 1;
         let lastInfo = { depth: 0, score: 0, nodes: 0, pv: [], bestMove: null };
         let lastBestMove = null;
         let disposed = false;
+        let workerFailed = false;
         let activeGo = null;
         const pending = new Map();
+
+        function timeoutForType(type) {
+            return type === 'go' ? goTimeoutMs : requestTimeoutMs;
+        }
+
+        function clearEntryTimeout(entry) {
+            if (!entry || !entry.timeoutId) return;
+            global.clearTimeout(entry.timeoutId);
+            entry.timeoutId = 0;
+        }
+
+        function settlePending(requestId, action, payload) {
+            const entry = pending.get(requestId);
+            if (!entry) return null;
+            pending.delete(requestId);
+            clearEntryTimeout(entry);
+            if (action === 'resolve') {
+                entry.resolve(payload);
+            } else {
+                entry.reject(payload);
+            }
+            return entry;
+        }
+
+        function rejectAllPending(error) {
+            pending.forEach(entry => {
+                clearEntryTimeout(entry);
+                entry.reject(error);
+            });
+            pending.clear();
+            activeGo = null;
+        }
+
+        function failWorker(error) {
+            if (workerFailed || disposed) return;
+            workerFailed = true;
+            const failure = error instanceof Error ? error : new Error(String(error || 'Worker engine failed.'));
+            rejectAllPending(failure);
+            try {
+                worker.terminate();
+            } catch (_error) {
+                // Ignore termination failures when the worker is already gone.
+            }
+        }
 
         function makeDeferred(type, onInfo) {
             const requestId = nextRequestId++;
@@ -72,22 +120,36 @@
                 rejectRef = reject;
             });
 
+            const timeoutId = global.setTimeout(() => {
+                const timeoutError = new Error('Worker command "' + type + '" timed out.');
+                const settled = settlePending(requestId, 'reject', timeoutError);
+                if (settled && activeGo && activeGo.requestId === requestId) {
+                    activeGo = null;
+                }
+                failWorker(timeoutError);
+            }, timeoutForType(type));
+
             pending.set(requestId, {
+                requestId,
                 type,
                 resolve: resolveRef,
                 reject: rejectRef,
                 onInfo,
+                timeoutId,
             });
 
             return { requestId, promise };
         }
 
         function send(type, payload, requestId) {
+            if (disposed || workerFailed) {
+                throw new Error('Worker engine is unavailable.');
+            }
             worker.postMessage(Object.assign({ type, requestId }, payload || {}));
         }
 
         worker.addEventListener('message', event => {
-            if (disposed) return;
+            if (disposed || workerFailed) return;
             const data = event.data || {};
             const requestId = data.requestId;
 
@@ -101,65 +163,106 @@
 
             if (data.type === 'bestmove') {
                 lastBestMove = data.bestMove || null;
-                const deferred = requestId ? pending.get(requestId) : activeGo;
-                if (requestId) pending.delete(requestId);
-                if (activeGo && activeGo.requestId === requestId) activeGo = null;
-                if (deferred) {
-                    deferred.resolve({ bestMove: data.bestMove || null, score: data.score || 0 });
+                const result = { bestMove: data.bestMove || null, score: data.score || 0 };
+                if (requestId) {
+                    settlePending(requestId, 'resolve', result);
+                    if (activeGo && activeGo.requestId === requestId) activeGo = null;
+                } else if (activeGo) {
+                    clearEntryTimeout(activeGo);
+                    pending.delete(activeGo.requestId);
+                    activeGo.resolve(result);
+                    activeGo = null;
                 }
                 return;
             }
 
             if (data.type === 'nnue-status') {
-                const deferred = requestId ? pending.get(requestId) : null;
-                if (requestId) pending.delete(requestId);
-                if (deferred) {
-                    deferred.resolve(data.nnue || { ready: false, source: 'unavailable' });
+                if (requestId) {
+                    settlePending(requestId, 'resolve', data.nnue || { ready: false, source: 'unavailable' });
                 }
                 return;
             }
 
             if (data.type === 'error') {
-                const deferred = requestId ? pending.get(requestId) : activeGo;
-                if (requestId) pending.delete(requestId);
-                if (activeGo && activeGo.requestId === requestId) activeGo = null;
                 const error = new Error(data.message || 'Worker engine error');
-                if (deferred) deferred.reject(error);
+                if (requestId) {
+                    settlePending(requestId, 'reject', error);
+                    if (activeGo && activeGo.requestId === requestId) activeGo = null;
+                    return;
+                }
+
+                if (activeGo) {
+                    clearEntryTimeout(activeGo);
+                    pending.delete(activeGo.requestId);
+                    activeGo.reject(error);
+                    activeGo = null;
+                    return;
+                }
+
+                failWorker(error);
                 return;
             }
 
             if (!requestId) return;
 
-            const deferred = pending.get(requestId);
-            if (!deferred) return;
-
             if (data.type === 'position-set' || data.type === 'move-made' || data.type === 'stopped') {
-                pending.delete(requestId);
-                deferred.resolve(data);
+                settlePending(requestId, 'resolve', data);
+                if (activeGo && activeGo.requestId === requestId) activeGo = null;
             }
+        });
+
+        worker.addEventListener('error', event => {
+            if (disposed) return;
+            const message = event && event.message ? event.message : 'Worker engine encountered an error.';
+            failWorker(new Error(message));
+        });
+
+        worker.addEventListener('messageerror', () => {
+            if (disposed) return;
+            failWorker(new Error('Worker engine message parsing failed.'));
         });
 
         return {
             mode: 'worker',
             setPosition(fen) {
                 const deferred = makeDeferred('setPosition');
-                send('setPosition', { fen }, deferred.requestId);
+                try {
+                    send('setPosition', { fen }, deferred.requestId);
+                } catch (error) {
+                    settlePending(deferred.requestId, 'reject', error);
+                    failWorker(error);
+                }
                 return deferred.promise;
             },
             makeMove(move) {
                 const deferred = makeDeferred('makeMove');
-                send('makeMove', { move }, deferred.requestId);
+                try {
+                    send('makeMove', { move }, deferred.requestId);
+                } catch (error) {
+                    settlePending(deferred.requestId, 'reject', error);
+                    failWorker(error);
+                }
                 return deferred.promise.then(result => Boolean(result.ok));
             },
             go(options, onInfo) {
                 const deferred = makeDeferred('go', onInfo);
-                activeGo = Object.assign({ requestId: deferred.requestId }, pending.get(deferred.requestId));
-                send('go', { options: options || {} }, deferred.requestId);
+                activeGo = pending.get(deferred.requestId) || null;
+                try {
+                    send('go', { options: options || {} }, deferred.requestId);
+                } catch (error) {
+                    settlePending(deferred.requestId, 'reject', error);
+                    failWorker(error);
+                }
                 return deferred.promise;
             },
             stop() {
                 const deferred = makeDeferred('stop');
-                send('stop', {}, deferred.requestId);
+                try {
+                    send('stop', {}, deferred.requestId);
+                } catch (error) {
+                    settlePending(deferred.requestId, 'reject', error);
+                    failWorker(error);
+                }
                 if (activeGo) {
                     activeGo = null;
                 }
@@ -173,28 +276,47 @@
             },
             getNNUEStatus() {
                 const deferred = makeDeferred('getNNUEStatus');
-                send('getNNUEStatus', {}, deferred.requestId);
+                try {
+                    send('getNNUEStatus', {}, deferred.requestId);
+                } catch (error) {
+                    settlePending(deferred.requestId, 'reject', error);
+                    failWorker(error);
+                }
                 return deferred.promise;
             },
             loadNNUE(network, options) {
                 const deferred = makeDeferred('loadNNUE');
-                send('loadNNUE', { network, options: options || {} }, deferred.requestId);
+                try {
+                    send('loadNNUE', { network, options: options || {} }, deferred.requestId);
+                } catch (error) {
+                    settlePending(deferred.requestId, 'reject', error);
+                    failWorker(error);
+                }
                 return deferred.promise;
             },
             resetNNUE() {
                 const deferred = makeDeferred('resetNNUE');
-                send('resetNNUE', {}, deferred.requestId);
+                try {
+                    send('resetNNUE', {}, deferred.requestId);
+                } catch (error) {
+                    settlePending(deferred.requestId, 'reject', error);
+                    failWorker(error);
+                }
                 return deferred.promise;
             },
             getFEN() {
                 return null;
             },
             destroy() {
+                if (disposed) return;
                 disposed = true;
-                pending.forEach(entry => entry.reject(new Error('Engine bridge disposed.')));
-                pending.clear();
-                activeGo = null;
-                worker.terminate();
+                workerFailed = true;
+                rejectAllPending(new Error('Engine bridge disposed.'));
+                try {
+                    worker.terminate();
+                } catch (_error) {
+                    // Ignore termination failures for already-closed workers.
+                }
             },
         };
     }
@@ -207,7 +329,110 @@
                 return createLocalEngineBridge();
             }
             try {
-                return createWorkerEngineBridge();
+                const workerBridge = createWorkerEngineBridge(opts);
+                let localBridge = null;
+                let activeBridge = workerBridge;
+
+                function ensureLocalBridge() {
+                    if (!localBridge) {
+                        localBridge = createLocalEngineBridge();
+                    }
+                    return localBridge;
+                }
+
+                function switchToLocalBridge(reason) {
+                    if (activeBridge && activeBridge.mode === 'local') {
+                        return activeBridge;
+                    }
+                    console.warn('engine_worker.js: switching to local engine bridge.', reason);
+                    try {
+                        if (workerBridge && typeof workerBridge.destroy === 'function') {
+                            workerBridge.destroy();
+                        }
+                    } catch (_error) {
+                        // Ignore worker teardown errors while switching transport.
+                    }
+                    activeBridge = ensureLocalBridge();
+                    return activeBridge;
+                }
+
+                function invoke(methodName, args) {
+                    const target = activeBridge;
+                    let result;
+                    try {
+                        result = target[methodName].apply(target, args);
+                    } catch (error) {
+                        if (target.mode === 'worker') {
+                            const fallback = switchToLocalBridge(error);
+                            return fallback[methodName].apply(fallback, args);
+                        }
+                        throw error;
+                    }
+
+                    if (result && typeof result.then === 'function') {
+                        return result.catch(error => {
+                            if (target.mode === 'worker') {
+                                const fallback = switchToLocalBridge(error);
+                                return fallback[methodName].apply(fallback, args);
+                            }
+                            throw error;
+                        });
+                    }
+
+                    return result;
+                }
+
+                return {
+                    get mode() {
+                        return activeBridge && activeBridge.mode ? activeBridge.mode : 'local';
+                    },
+                    setPosition(fen) {
+                        return invoke('setPosition', [fen]);
+                    },
+                    makeMove(move) {
+                        return invoke('makeMove', [move]);
+                    },
+                    go(optionsArg, onInfo) {
+                        return invoke('go', [optionsArg, onInfo]);
+                    },
+                    stop() {
+                        return invoke('stop', []);
+                    },
+                    getBestMove() {
+                        return invoke('getBestMove', []);
+                    },
+                    getInfo() {
+                        return invoke('getInfo', []);
+                    },
+                    getNNUEStatus() {
+                        return invoke('getNNUEStatus', []);
+                    },
+                    loadNNUE(network, nnueOptions) {
+                        return invoke('loadNNUE', [network, nnueOptions]);
+                    },
+                    resetNNUE() {
+                        return invoke('resetNNUE', []);
+                    },
+                    getFEN() {
+                        return invoke('getFEN', []);
+                    },
+                    destroy() {
+                        try {
+                            if (workerBridge && typeof workerBridge.destroy === 'function') {
+                                workerBridge.destroy();
+                            }
+                        } catch (_error) {
+                            // Ignore worker teardown failures.
+                        }
+                        try {
+                            if (localBridge && typeof localBridge.destroy === 'function') {
+                                localBridge.destroy();
+                            }
+                        } catch (_error) {
+                            // Ignore local teardown failures.
+                        }
+                    },
+                };
             } catch (error) {
                 console.warn('engine_worker.js: worker transport unavailable, falling back to local engine.', error);
             }

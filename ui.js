@@ -11,6 +11,8 @@ const THEMES = [
 ];
 
 const PIECE_SET_KEY = 'bbjs-piece-set';
+const BOARD3D_RENDER_STYLE_KEY = 'bbjs-3d-render-style';
+const BOARD3D_RENDER_STYLES = ['staunton', 'staunton-ivory', 'staunton-bronze', 'legacy', 'scene'];
 const PIECE_SETS = {
     emoji: {
         // Light Side (White)
@@ -106,6 +108,43 @@ const PIECE_SETS = {
     },
 };
 let currentPieceSet = 'emoji';
+let current3DRenderStyle = 'staunton';
+
+function normalize3DRenderStyle(style) {
+    const raw = String(style || '').trim().toLowerCase();
+    if (BOARD3D_RENDER_STYLES.includes(raw)) return raw;
+    if (typeof window.Board3D === 'function' && typeof window.Board3D.normalizeRenderStyle === 'function') {
+        const normalized = window.Board3D.normalizeRenderStyle(raw);
+        if (BOARD3D_RENDER_STYLES.includes(normalized)) return normalized;
+    }
+    return 'staunton';
+}
+
+function getCurrent3DRenderStyle() {
+    return normalize3DRenderStyle(current3DRenderStyle);
+}
+
+function apply3DRenderStyle(style, options) {
+    const normalized = normalize3DRenderStyle(style);
+    current3DRenderStyle = normalized;
+    document.body.dataset.board3dStyle = normalized;
+
+    document.querySelectorAll('[data-3d-style]').forEach(el => {
+        el.classList.toggle('theme-active', el.getAttribute('data-3d-style') === normalized);
+    });
+
+    try { localStorage.setItem(BOARD3D_RENDER_STYLE_KEY, normalized); } catch (e) {}
+
+    if (options && options.skipRender) return;
+
+    if (board3D && typeof board3D.setRenderStyle === 'function') {
+        board3D.setRenderStyle(normalized);
+    }
+
+    if (boardMode === '3d') {
+        syncBoardVisibility();
+    }
+}
 
 function applyTheme(theme) {
     THEMES.forEach(t => document.body.classList.remove(t));
@@ -165,6 +204,13 @@ try {
         applyPieceSet(savedPieceSet && PIECE_SETS[savedPieceSet] ? savedPieceSet : 'emoji', { skipRender: true });
 } catch (e) {
         applyPieceSet('emoji', { skipRender: true });
+}
+
+try {
+    const saved3DStyle = localStorage.getItem(BOARD3D_RENDER_STYLE_KEY);
+    apply3DRenderStyle(saved3DStyle || 'staunton', { skipRender: true });
+} catch (e) {
+    apply3DRenderStyle('staunton', { skipRender: true });
 }
 
 function createPiece(fenChar) {
@@ -8054,16 +8100,29 @@ function getBoardElements() {
     };
 }
 
-function ensureBoard3D() {
+function canUse3DForCurrentBoard() {
+    if (typeof window.Board3D !== 'function' || !window.THREE) {
+        return false;
+    }
+    const meta = getBoardMeta(getRenderedGameState());
+    return meta.files.length === 8 && meta.ranks.length === 8;
+}
+
+function ensureBoard3D(options) {
+    const settings = options || {};
     const { board3DContainer } = getBoardElements();
     if (!board3DContainer || typeof window.Board3D !== 'function' || !window.THREE) {
+        return null;
+    }
+
+    if (!board3D && !settings.createIfMissing) {
         return null;
     }
 
     if (!board3D) {
         try {
             board3D = new window.Board3D(board3DContainer, {
-                renderStyle: 'staunton',
+                renderStyle: settings.renderStyle || getCurrent3DRenderStyle(),
                 onSquareClick(squareName) {
                     handleBoardSquareClick(squareName).catch(error => {
                         console.error('UI.js: failed to handle 3D square click.', error);
@@ -8076,8 +8135,12 @@ function ensureBoard3D() {
         }
     }
 
-    if (board3D && typeof board3D.setRenderStyle === 'function') {
-        board3D.setRenderStyle('staunton');
+    if (!board3D) {
+        return null;
+    }
+
+    if (settings.renderStyle && typeof board3D.setRenderStyle === 'function') {
+        board3D.setRenderStyle(settings.renderStyle);
     }
 
     if (board3D && typeof board3D.refreshTheme === 'function') {
@@ -8093,7 +8156,7 @@ function syncBoardOrientation() {
         play.setBoardFlipped(boardFlipped);
     }
 
-    const threeBoard = ensureBoard3D();
+    const threeBoard = board3D || (boardMode === '3d' ? ensureBoard3D({ createIfMissing: true, renderStyle: getCurrent3DRenderStyle() }) : null);
     if (threeBoard && typeof threeBoard.setFlipped === 'function') {
         threeBoard.setFlipped(boardFlipped);
     }
@@ -8192,9 +8255,19 @@ function ensureBoardResizeObserver() {
 
 function syncBoardVisibility() {
     const { board2D, board3DContainer, toggle3DButton, flipBoardButton, resetViewButton } = getBoardElements();
-    const threeBoard = ensureBoard3D();
-    const canUse3D = Boolean(threeBoard) && getBoardMeta(getRenderedGameState()).files.length === 8 && getBoardMeta(getRenderedGameState()).ranks.length === 8;
-    const show3D = canUse3D && boardMode === '3d';
+    const canUse3D = canUse3DForCurrentBoard();
+    if (!canUse3D && boardMode === '3d') {
+        boardMode = '2d';
+    }
+
+    let show3D = canUse3D && boardMode === '3d';
+    const threeBoard = show3D
+        ? ensureBoard3D({ createIfMissing: true, renderStyle: getCurrent3DRenderStyle() })
+        : board3D;
+    if (show3D && !threeBoard) {
+        boardMode = '2d';
+        show3D = false;
+    }
 
     scheduleDesktopBoardSizing();
 
@@ -8257,11 +8330,22 @@ function initBoardControls() {
     if (toggle3DButton && !toggle3DButton.dataset.bound) {
         toggle3DButton.dataset.bound = 'true';
         toggle3DButton.addEventListener('click', () => {
-            if (!ensureBoard3D()) {
+            if (boardMode === '3d') {
                 setBoardMode('2d');
                 return;
             }
-            setBoardMode(boardMode === '3d' ? '2d' : '3d');
+
+            if (!canUse3DForCurrentBoard()) {
+                setBoardMode('2d');
+                return;
+            }
+
+            if (!ensureBoard3D({ createIfMissing: true, renderStyle: getCurrent3DRenderStyle() })) {
+                setBoardMode('2d');
+                return;
+            }
+
+            setBoardMode('3d');
         });
     }
 
@@ -8276,8 +8360,9 @@ function initBoardControls() {
     if (resetViewButton && !resetViewButton.dataset.bound) {
         resetViewButton.dataset.bound = 'true';
         resetViewButton.addEventListener('click', () => {
-            if (boardMode === '3d' && ensureBoard3D()) {
-                board3D.resetView();
+            const threeBoard = board3D || ensureBoard3D({ createIfMissing: true, renderStyle: getCurrent3DRenderStyle() });
+            if (boardMode === '3d' && threeBoard) {
+                threeBoard.resetView();
             }
         });
     }
@@ -8328,7 +8413,7 @@ function paintPosition(fen) {
     renderLoadSaveView();
     renderToolsView();
 
-    if (board3D) {
+    if (board3D && boardMode === '3d') {
         board3D.renderFEN(getRenderedBoardFEN());
     }
 
@@ -8737,6 +8822,15 @@ if (!menuButton || !sideDrawer) {
             closeDrawer();
         });
     });
+
+    document.querySelectorAll('[data-3d-style]').forEach(item => {
+        item.addEventListener('click', function () {
+            apply3DRenderStyle(this.getAttribute('data-3d-style'));
+            closeDrawer();
+        });
+    });
+
+    apply3DRenderStyle(getCurrent3DRenderStyle(), { skipRender: true });
 
     console.log("UI.js: init complete");
 }

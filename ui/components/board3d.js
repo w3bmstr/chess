@@ -10,15 +10,76 @@ class Board3D {
         k:'🦹',  q:'🧙‍♂️', r:'👾', b:'😈', n:'🐉', p:'👤'
     };
 
-    static RENDER_STYLES = ['legacy', 'staunton', 'scene'];
+    static RENDER_STYLES = ['legacy', 'staunton', 'staunton-ivory', 'staunton-bronze', 'scene'];
 
     static STAUNTON_STL_PATHS = {
-        p: 'Staunton Chess Set/Solid Bases/Pawn (Solid Base).stl',
-        n: 'Staunton Chess Set/Solid Bases/Knight (Solid Base).stl',
-        b: 'Staunton Chess Set/Solid Bases/Bishop (Solid Base).stl',
-        r: 'Staunton Chess Set/Solid Bases/Rook (Solid Base).stl',
-        q: 'Staunton Chess Set/Solid Bases/Queen (Solid Base).stl',
-        k: 'Staunton Chess Set/Solid Bases/King (Solid Base).stl'
+        p: [
+            '/data/assets/3d/staunton/Pawn (Solid Base).stl',
+            'data/assets/3d/staunton/Pawn (Solid Base).stl',
+            '/Pawn (Solid Base).stl',
+            'Pawn (Solid Base).stl',
+            '/Staunton Chess Set/Solid Bases/Pawn (Solid Base).stl',
+            'Staunton Chess Set/Solid Bases/Pawn (Solid Base).stl'
+        ],
+        n: [
+            '/data/assets/3d/staunton/Knight (Solid Base).stl',
+            'data/assets/3d/staunton/Knight (Solid Base).stl',
+            '/Knight (Solid Base).stl',
+            'Knight (Solid Base).stl',
+            '/Knight (Solid Base) .stl',
+            'Knight (Solid Base) .stl',
+            '/Knight (Solid Base) (1).stl',
+            'Knight (Solid Base) (1).stl',
+            '/Staunton Chess Set/Solid Bases/Knight (Solid Base).stl',
+            'Staunton Chess Set/Solid Bases/Knight (Solid Base).stl'
+        ],
+        b: [
+            '/data/assets/3d/staunton/Bishop (Solid Base).stl',
+            'data/assets/3d/staunton/Bishop (Solid Base).stl',
+            '/Bishop (Solid Base).stl',
+            'Bishop (Solid Base).stl',
+            '/Staunton Chess Set/Solid Bases/Bishop (Solid Base).stl',
+            'Staunton Chess Set/Solid Bases/Bishop (Solid Base).stl'
+        ],
+        r: [
+            '/data/assets/3d/staunton/Rook (Solid Base).stl',
+            'data/assets/3d/staunton/Rook (Solid Base).stl',
+            '/Rook (Solid Base).stl',
+            'Rook (Solid Base).stl',
+            '/Staunton Chess Set/Solid Bases/Rook (Solid Base).stl',
+            'Staunton Chess Set/Solid Bases/Rook (Solid Base).stl'
+        ],
+        q: [
+            '/data/assets/3d/staunton/Queen (Solid Base).stl',
+            'data/assets/3d/staunton/Queen (Solid Base).stl',
+            '/Queen (Solid Base).stl',
+            'Queen (Solid Base).stl',
+            '/Staunton Chess Set/Solid Bases/Queen (Solid Base).stl',
+            'Staunton Chess Set/Solid Bases/Queen (Solid Base).stl'
+        ],
+        k: [
+            '/data/assets/3d/staunton/King (Solid Base).stl',
+            'data/assets/3d/staunton/King (Solid Base).stl',
+            '/King (Solid Base).stl',
+            'King (Solid Base).stl',
+            '/Staunton Chess Set/Solid Bases/King (Solid Base).stl',
+            'Staunton Chess Set/Solid Bases/King (Solid Base).stl'
+        ]
+    };
+
+    static STAUNTON_MATERIALS = {
+        staunton: {
+            white: { color: 0xe7ddc7, accentColor: 0xbca579, roughness: 0.52, metalness: 0.08 },
+            black: { color: 0x2f3138, accentColor: 0x1a1d23, roughness: 0.64, metalness: 0.08 }
+        },
+        'staunton-ivory': {
+            white: { color: 0xf2ead7, accentColor: 0xd5c3a1, roughness: 0.42, metalness: 0.18 },
+            black: { color: 0x47515d, accentColor: 0x252d36, roughness: 0.5, metalness: 0.2 }
+        },
+        'staunton-bronze': {
+            white: { color: 0xc59a4a, accentColor: 0x8a6434, roughness: 0.33, metalness: 0.68 },
+            black: { color: 0x1d1f24, accentColor: 0x050608, roughness: 0.46, metalness: 0.36 }
+        }
     };
 
     static STAUNTON_HEIGHTS = {
@@ -30,9 +91,11 @@ class Board3D {
         k: 1.16
     };
 
-    static SCENE_GLB_URL = 'data/assets/3d/staunton/Chess Scene.glb';
+    static SCENE_GLB_URL = '/data/assets/3d/staunton/Chess Scene.glb';
     static _stauntonGeometryCache = new Map();
     static _stauntonGeometryPromises = new Map();
+    static _stauntonMissingPieces = new Set();
+    static _stauntonAssetsUnavailable = false;
 
     constructor(container, options) {
         this.container = container;
@@ -66,13 +129,30 @@ class Board3D {
     }
 
     static normalizeRenderStyle(style) {
-        return Board3D.RENDER_STYLES.includes(style) ? style : 'legacy';
+        const aliases = {
+            'stl-classic': 'staunton',
+            'stl-ivory': 'staunton-ivory',
+            'stl-bronze': 'staunton-bronze'
+        };
+        const raw = String(style || '').trim().toLowerCase();
+        const normalized = aliases[raw] || raw;
+        return Board3D.RENDER_STYLES.includes(normalized) ? normalized : 'legacy';
     }
 
     static nextRenderStyle(style) {
         const normalized = Board3D.normalizeRenderStyle(style);
         const index = Board3D.RENDER_STYLES.indexOf(normalized);
         return Board3D.RENDER_STYLES[(index + 1) % Board3D.RENDER_STYLES.length];
+    }
+
+    static isStauntonStyle(style) {
+        const normalized = Board3D.normalizeRenderStyle(style);
+        return normalized === 'staunton' || normalized === 'staunton-ivory' || normalized === 'staunton-bronze';
+    }
+
+    static getStauntonPalette(style) {
+        const normalized = Board3D.normalizeRenderStyle(style);
+        return Board3D.STAUNTON_MATERIALS[normalized] || Board3D.STAUNTON_MATERIALS.staunton;
     }
 
     _init() {
@@ -212,7 +292,7 @@ class Board3D {
         this._clearPieces();
         this._syncSceneMode();
 
-        if (this.renderStyle !== 'legacy') {
+        if (Board3D.isStauntonStyle(this.renderStyle) && !Board3D._stauntonAssetsUnavailable) {
             this._ensureStauntonAssets().then(() => {
                 if (this.lastFEN === String(fen || '')) this.renderFEN(this.lastFEN);
             }).catch(error => {
@@ -307,10 +387,12 @@ class Board3D {
         }
 
         const isWhite = fenChar === fenChar.toUpperCase();
+        const palette = Board3D.getStauntonPalette(this.renderStyle);
+        const sidePalette = isWhite ? palette.white : palette.black;
         const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
-            color: isWhite ? 0xe7ddc7 : 0x2f3138,
-            roughness: isWhite ? 0.52 : 0.64,
-            metalness: 0.08
+            color: sidePalette.color,
+            roughness: sidePalette.roughness,
+            metalness: sidePalette.metalness
         }));
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -326,15 +408,17 @@ class Board3D {
         const THREE = window.THREE;
         const isWhite = fenChar === fenChar.toUpperCase();
         const pieceType = String(fenChar || '').toLowerCase();
+        const palette = Board3D.getStauntonPalette(this.renderStyle);
+        const sidePalette = isWhite ? palette.white : palette.black;
         const bodyMat = new THREE.MeshStandardMaterial({
-            color: isWhite ? 0xe7ddc7 : 0x2f2f38,
-            roughness: isWhite ? 0.5 : 0.62,
-            metalness: 0.12
+            color: sidePalette.color,
+            roughness: Math.min(0.95, sidePalette.roughness + 0.04),
+            metalness: sidePalette.metalness
         });
         const accentMat = new THREE.MeshStandardMaterial({
-            color: isWhite ? 0xbca579 : 0x1a1d23,
-            roughness: 0.7,
-            metalness: 0.05
+            color: sidePalette.accentColor,
+            roughness: Math.min(0.95, sidePalette.roughness + 0.14),
+            metalness: Math.max(0, sidePalette.metalness - 0.04)
         });
 
         const root = new THREE.Group();
@@ -383,8 +467,9 @@ class Board3D {
             addPart(new THREE.BoxGeometry(0.05, 0.2, 0.05), bodyMat, 1.02);
             addPart(new THREE.BoxGeometry(0.16, 0.05, 0.05), bodyMat, 0.97);
         } else {
-            this._spawnLegacyPiece(fenChar, file, rank);
-            return;
+            // For non-standard piece codes, keep a simple solid 3D marker instead of 2D sprites.
+            addPart(new THREE.CylinderGeometry(0.15, 0.22, 0.5, 20), bodyMat, 0.46);
+            addPart(new THREE.SphereGeometry(0.1, 18, 14), accentMat, 0.8);
         }
 
         this.scene.add(root);
@@ -392,11 +477,16 @@ class Board3D {
     }
 
     async _ensureStauntonAssets() {
+        if (Board3D._stauntonAssetsUnavailable) {
+            return;
+        }
         const entries = Object.entries(Board3D.STAUNTON_STL_PATHS);
-        await Promise.all(entries.map(([pieceType, path]) => {
+        await Promise.all(entries.map(([pieceType, pathCandidates]) => {
             if (Board3D._stauntonGeometryCache.has(pieceType)) return Promise.resolve(Board3D._stauntonGeometryCache.get(pieceType));
+            if (Board3D._stauntonMissingPieces.has(pieceType)) return Promise.resolve(null);
             if (Board3D._stauntonGeometryPromises.has(pieceType)) return Board3D._stauntonGeometryPromises.get(pieceType);
-            const promise = this._loadStauntonGeometry(pieceType, path)
+
+            const promise = this._loadStauntonGeometry(pieceType, pathCandidates)
                 .then(geometry => {
                     Board3D._stauntonGeometryCache.set(pieceType, geometry);
                     Board3D._stauntonGeometryPromises.delete(pieceType);
@@ -404,19 +494,38 @@ class Board3D {
                 })
                 .catch(error => {
                     Board3D._stauntonGeometryPromises.delete(pieceType);
-                    throw error;
+                    Board3D._stauntonMissingPieces.add(pieceType);
+                    console.warn(`Board3D: STL missing for piece '${pieceType}', using procedural fallback for that piece.`, error);
+                    return null;
                 });
             Board3D._stauntonGeometryPromises.set(pieceType, promise);
             return promise;
         }));
+
+        if (!Board3D._stauntonGeometryCache.size) {
+            Board3D._stauntonAssetsUnavailable = true;
+            throw new Error('No Staunton STL assets were loaded.');
+        }
     }
 
-    async _loadStauntonGeometry(pieceType, path) {
-        const response = await fetch(encodeURI(path));
-        if (!response.ok) throw new Error(`Failed to load STL: ${path}`);
-        const buffer = await response.arrayBuffer();
-        const geometry = Board3D.parseStlGeometry(buffer);
-        return Board3D.normalizeStauntonGeometry(geometry, pieceType, window.THREE);
+    async _loadStauntonGeometry(pieceType, paths) {
+        const candidates = Array.isArray(paths) ? paths : [paths];
+        let lastError = null;
+
+        for (const path of candidates) {
+            try {
+                const response = await fetch(encodeURI(path));
+                if (!response.ok) throw new Error(`Failed to load STL: ${path}`);
+                const buffer = await response.arrayBuffer();
+                const geometry = Board3D.parseStlGeometry(buffer);
+                return Board3D.normalizeStauntonGeometry(geometry, pieceType, window.THREE);
+            } catch (error) {
+                lastError = error;
+            }
+        }
+
+        const reason = lastError && lastError.message ? ` (${lastError.message})` : '';
+        throw new Error(`Failed to load STL for piece '${pieceType}'. Tried: ${candidates.join(', ')}${reason}`);
     }
 
     static parseStlGeometry(arrayBuffer) {

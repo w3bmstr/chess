@@ -172,11 +172,10 @@ class Board3D {
         this.camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 200);
         this._applyOrbit();
 
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+        this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: 'low-power' });
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1));
         this.renderer.setSize(width, height);
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.shadowMap.enabled = false;
         this.container.appendChild(this.renderer.domElement);
 
         const ambient = new THREE.AmbientLight(0xffffff, 0.48);
@@ -184,12 +183,6 @@ class Board3D {
 
         const sun = new THREE.DirectionalLight(0xffffff, 0.95);
         sun.position.set(6, 14, 8);
-        sun.castShadow = true;
-        sun.shadow.camera.left = -8;
-        sun.shadow.camera.right = 8;
-        sun.shadow.camera.top = 8;
-        sun.shadow.camera.bottom = -8;
-        sun.shadow.mapSize.set(1024, 1024);
         this.scene.add(sun);
 
         const fill = new THREE.DirectionalLight(0x8899cc, 0.35);
@@ -436,25 +429,25 @@ class Board3D {
             return mesh;
         };
 
-        addPart(new THREE.CylinderGeometry(0.31, 0.36, 0.14, 24), accentMat, 0.07);
-        addPart(new THREE.CylinderGeometry(0.24, 0.29, 0.1, 24), bodyMat, 0.17);
+        addPart(new THREE.CylinderGeometry(0.31, 0.36, 0.14, 12), accentMat, 0.07);
+        addPart(new THREE.CylinderGeometry(0.24, 0.29, 0.1, 12), bodyMat, 0.17);
 
         if (pieceType === 'p') {
-            addPart(new THREE.CylinderGeometry(0.14, 0.18, 0.38, 20), bodyMat, 0.4);
-            addPart(new THREE.SphereGeometry(0.115, 20, 16), accentMat, 0.64);
+            addPart(new THREE.CylinderGeometry(0.14, 0.18, 0.38, 12), bodyMat, 0.4);
+            addPart(new THREE.SphereGeometry(0.115, 10, 8), accentMat, 0.64);
         } else if (pieceType === 'n') {
-            addPart(new THREE.CylinderGeometry(0.15, 0.21, 0.32, 20), bodyMat, 0.36);
+            addPart(new THREE.CylinderGeometry(0.15, 0.21, 0.32, 12), bodyMat, 0.36);
             const head = addPart(new THREE.BoxGeometry(0.22, 0.34, 0.12), bodyMat, 0.62);
             head.rotation.z = -0.22;
             addPart(new THREE.ConeGeometry(0.06, 0.15, 12), accentMat, 0.83);
         } else if (pieceType === 'b') {
-            addPart(new THREE.CylinderGeometry(0.14, 0.2, 0.44, 22), bodyMat, 0.42);
-            addPart(new THREE.SphereGeometry(0.12, 20, 16), bodyMat, 0.7);
+            addPart(new THREE.CylinderGeometry(0.14, 0.2, 0.44, 12), bodyMat, 0.42);
+            addPart(new THREE.SphereGeometry(0.12, 10, 8), bodyMat, 0.7);
             const mitre = addPart(new THREE.BoxGeometry(0.03, 0.18, 0.2), accentMat, 0.74);
             mitre.rotation.z = 0.42;
         } else if (pieceType === 'r') {
-            addPart(new THREE.CylinderGeometry(0.15, 0.2, 0.46, 20), bodyMat, 0.43);
-            addPart(new THREE.CylinderGeometry(0.21, 0.21, 0.12, 24), accentMat, 0.72);
+            addPart(new THREE.CylinderGeometry(0.15, 0.2, 0.46, 12), bodyMat, 0.43);
+            addPart(new THREE.CylinderGeometry(0.21, 0.21, 0.12, 12), accentMat, 0.72);
             for (let i = 0; i < 4; i++) {
                 const crenel = addPart(new THREE.BoxGeometry(0.08, 0.08, 0.08), bodyMat, 0.8);
                 const angle = i * (Math.PI / 2);
@@ -462,12 +455,12 @@ class Board3D {
                 crenel.position.z = Math.sin(angle) * 0.14;
             }
         } else if (pieceType === 'q') {
-            addPart(new THREE.CylinderGeometry(0.14, 0.2, 0.52, 22), bodyMat, 0.46);
-            addPart(new THREE.TorusGeometry(0.11, 0.03, 12, 24), accentMat, 0.72);
-            addPart(new THREE.SphereGeometry(0.12, 20, 16), bodyMat, 0.84);
+            addPart(new THREE.CylinderGeometry(0.14, 0.2, 0.52, 12), bodyMat, 0.46);
+            addPart(new THREE.TorusGeometry(0.11, 0.03, 8, 12), accentMat, 0.72);
+            addPart(new THREE.SphereGeometry(0.12, 10, 8), bodyMat, 0.84);
         } else if (pieceType === 'k') {
-            addPart(new THREE.CylinderGeometry(0.14, 0.2, 0.56, 22), bodyMat, 0.48);
-            addPart(new THREE.SphereGeometry(0.1, 20, 16), accentMat, 0.82);
+            addPart(new THREE.CylinderGeometry(0.14, 0.2, 0.56, 12), bodyMat, 0.48);
+            addPart(new THREE.SphereGeometry(0.1, 10, 8), accentMat, 0.82);
             addPart(new THREE.BoxGeometry(0.05, 0.2, 0.05), bodyMat, 1.02);
             addPart(new THREE.BoxGeometry(0.16, 0.05, 0.05), bodyMat, 0.97);
         } else {
@@ -932,12 +925,16 @@ class Board3D {
     _startLoop() {
         if (this._loopRunning) return;
         this._loopRunning = true;
+        let lastRender = 0;
         const loop = () => {
             if (!this.active) {
                 this._loopRunning = false;
                 return;
             }
             requestAnimationFrame(loop);
+            const now = performance.now();
+            if (now - lastRender < 33) return;
+            lastRender = now;
             this.renderer.render(this.scene, this.camera);
         };
         loop();

@@ -92,6 +92,10 @@ class Board3D {
     };
 
     static SCENE_GLB_URL = '/data/assets/3d/staunton/Chess Scene.glb';
+    // The source STL files are too large to parse safely on the browser main
+    // thread, especially on mobile. Procedural pieces are used until smaller
+    // optimized assets are available.
+    static LOAD_STL_ASSETS = false;
     static _stauntonGeometryCache = new Map();
     static _stauntonGeometryPromises = new Map();
     static _stauntonMissingPieces = new Set();
@@ -169,7 +173,7 @@ class Board3D {
         this._applyOrbit();
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
         this.renderer.setSize(width, height);
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -185,7 +189,7 @@ class Board3D {
         sun.shadow.camera.right = 8;
         sun.shadow.camera.top = 8;
         sun.shadow.camera.bottom = -8;
-        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.mapSize.set(1024, 1024);
         this.scene.add(sun);
 
         const fill = new THREE.DirectionalLight(0x8899cc, 0.35);
@@ -292,7 +296,7 @@ class Board3D {
         this._clearPieces();
         this._syncSceneMode();
 
-        if (Board3D.isStauntonStyle(this.renderStyle) && !Board3D._stauntonAssetsUnavailable) {
+        if (Board3D.LOAD_STL_ASSETS && Board3D.isStauntonStyle(this.renderStyle) && !Board3D._stauntonAssetsUnavailable) {
             this._ensureStauntonAssets().then(() => {
                 if (this.lastFEN === String(fen || '')) this.renderFEN(this.lastFEN);
             }).catch(error => {

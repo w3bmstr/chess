@@ -623,7 +623,7 @@
 				renderAliasMeta(entry.aliases, 'Search aliases'),
 				'<section class="opening-detail-section"><div class="opening-detail-section-title">Description</div><div class="engine-pv">' + highlightMatch(entry.description || 'No description available for this ECO code.', ecoSearch) + '</div></section>',
 				(lines.length
-					? '<section class="play-panel"><h3 class="play-panel-title">Recorded Lines</h3><div class="opening-transposition-list">' + lines.map(renderEcoLine).join('') + '</div></section>'
+					? '<section class="opening-detail-section"><div class="opening-detail-section-title">Recorded Lines</div><div class="opening-transposition-list">' + lines.map(renderEcoLine).join('') + '</div></section>'
 					: '<div class="engine-summary-empty">This code is available in the full ECO index, but no exact move tree is stored in the current explorer book for it yet.</div>')
 			].join('');
 		}

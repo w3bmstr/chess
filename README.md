@@ -54,6 +54,22 @@ Examples:
 - `powershell -ExecutionPolicy Bypass -File .\scripts\open-test-suite.ps1 -Suite full`
 - `powershell -ExecutionPolicy Bypass -File .\scripts\stop-test-server.ps1`
 
+### GitHub Pages
+
+The site is already organized as one GitHub repository. GitHub Pages keeps the
+relative folders used by the browser app (`app`, `config`, `data`, `engine`,
+`ui`, and `vendor`); flattening them into one physical folder would create
+filename collisions and break the script paths.
+
+The [Deploy GitHub Pages workflow](.github/workflows/pages.yml) publishes the
+root `index.html` and the files it needs whenever `main` or `master` is
+updated. Enable **Settings > Pages > Source: GitHub Actions** once in the
+repository settings.
+
+GitHub Pages hosts the browser application only. The Node multiplayer server
+under `server/` needs a separate Node-capable host, and its URL must be set in
+`config/runtime-config.js` before multiplayer can be used.
+
 ### VS Code Tasks
 
 The repository now includes repeatable VS Code tasks in [.vscode/tasks.json](.vscode/tasks.json).

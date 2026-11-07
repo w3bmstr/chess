@@ -215,21 +215,21 @@ class Board3D {
         const darkCol = new THREE.Color(darkHex);
         const frameCol = new THREE.Color(frameHex);
 
-        const frame = this._trackBoardVisual(new THREE.Mesh(
+        this.frameMesh = this._trackBoardVisual(new THREE.Mesh(
             new THREE.BoxGeometry(9.2, 0.32, 9.2),
             new THREE.MeshLambertMaterial({ color: frameCol })
         ));
-        frame.position.y = -0.22;
-        frame.receiveShadow = true;
-        this.scene.add(frame);
+        this.frameMesh.position.y = -0.22;
+        this.frameMesh.receiveShadow = true;
+        this.scene.add(this.frameMesh);
 
-        const plinth = this._trackBoardVisual(new THREE.Mesh(
+        this.plinthMesh = this._trackBoardVisual(new THREE.Mesh(
             new THREE.BoxGeometry(9.6, 0.1, 9.6),
             new THREE.MeshLambertMaterial({ color: frameCol.clone().multiplyScalar(0.7) })
         ));
-        plinth.position.y = -0.4;
-        plinth.receiveShadow = true;
-        this.scene.add(plinth);
+        this.plinthMesh.position.y = -0.4;
+        this.plinthMesh.receiveShadow = true;
+        this.scene.add(this.plinthMesh);
 
         const sqGeo = new THREE.BoxGeometry(1, 0.18, 1);
         for (let rank = 0; rank < 8; rank++) {
@@ -886,6 +886,7 @@ class Board3D {
         const css = getComputedStyle(document.body);
         const lightC = new THREE.Color(css.getPropertyValue('--sq-light').trim() || '#f0d9b5');
         const darkC = new THREE.Color(css.getPropertyValue('--sq-dark').trim() || '#b58863');
+        const frameC = new THREE.Color(css.getPropertyValue('--board-frame').trim() || '#3a2f1b');
         for (let rank = 0; rank < 8; rank++) {
             for (let file = 0; file < 8; file++) {
                 const square = this.squareMeshes[rank * 8 + file];
@@ -893,6 +894,8 @@ class Board3D {
                 square.material.color.set((rank + file) % 2 === 0 ? lightC : darkC);
             }
         }
+        if (this.frameMesh) this.frameMesh.material.color.set(frameC);
+        if (this.plinthMesh) this.plinthMesh.material.color.set(frameC.clone().multiplyScalar(0.7));
         this._updateSceneBg();
     }
 

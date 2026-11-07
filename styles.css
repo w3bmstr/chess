@@ -2694,6 +2694,71 @@ body[data-piece-set="classic"] .piece {
         padding: 0;
     }
 
+    /* Openings view — remove double/triple border nesting on mobile,
+       and let content use the full screen width */
+    .openings-layout {
+        gap: 0;
+    }
+
+    .openings-panel {
+        border: none;
+        border-radius: 0;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--panel-border);
+    }
+
+    .openings-panel + .openings-panel {
+        border-top: none;
+    }
+
+    .openings-header,
+    .openings-section-tabs,
+    .openings-note,
+    .opening-encyclopedia-toolbar,
+    .opening-encyclopedia-detail,
+    .opening-badge.large,
+    .opening-stat-chips,
+    .opening-detail-section,
+    .opening-alias-list,
+    .opening-wdl-panel,
+    .opening-wdl-bars,
+    .opening-cp-row,
+    .opening-encyclopedia-status,
+    .engine-summary-empty,
+    .engine-pv,
+    .opening-subtitle {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    /* Encyclopedia list+detail stack vertically; detail has no extra border */
+    .opening-encyclopedia-grid {
+        gap: 0;
+    }
+
+    .opening-encyclopedia-list {
+        max-height: none;
+        overflow: visible;
+        border-bottom: 1px solid var(--panel-border);
+        padding-bottom: 14px;
+        margin-bottom: 14px;
+        padding-right: 0;
+    }
+
+    .opening-encyclopedia-detail {
+        padding-top: 0;
+    }
+
+    /* Explorer grid — single column, no extra panel border */
+    .opening-explorer-grid {
+        gap: 10px;
+    }
+
+    /* Stat grid 2-col on narrow screens */
+    .opening-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .settings-grid {
         grid-template-columns: 1fr;
     }

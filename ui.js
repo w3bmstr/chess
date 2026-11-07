@@ -6334,7 +6334,11 @@ function ensureOpeningsView() {
                 const result = controller.importUCILine(uciLine);
                 if (!result || result.ok === false) return;
                 paintPosition(currentBoardFEN);
-                renderOpeningsView();
+                if (typeof window.Chess2ShowView === 'function') {
+                    window.Chess2ShowView('play');
+                } else {
+                    renderOpeningsView();
+                }
             },
             onSelectMove(index) {
                 navigateToMove(index);

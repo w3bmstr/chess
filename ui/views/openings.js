@@ -96,6 +96,12 @@
 					return;
 				}
 
+				const bookLoadButton = event.target.closest('[data-book-load-line]');
+				if (bookLoadButton && typeof options.onLoadEcoLine === 'function') {
+					options.onLoadEcoLine(bookLoadButton.getAttribute('data-book-load-line'));
+					return;
+				}
+
 				const bookKeyButton = event.target.closest('[data-book-key]');
 				if (bookKeyButton) {
 					selectedBookKey = bookKeyButton.getAttribute('data-book-key') || null;
@@ -520,7 +526,8 @@
 			return catalog.map(function (entry) {
 				const isSelected = selectedBookKey === entry.key;
 				const isCurrent = Boolean(recognized && recognized.key === entry.key);
-				return '<button type="button" class="opening-eco-row opening-book-row' + (isSelected ? ' active' : '') + (isCurrent ? ' current' : '') + '" data-book-key="' + escapeHtml(entry.key || '') + '" title="' + escapeHtml(entry.label || entry.familyLabel || 'Book line') + '"><span class="opening-eco">' + escapeHtml(entry.eco || '-') + '</span><span class="opening-eco-copy"><span class="opening-name">' + highlightMatch(entry.label || entry.familyLabel || 'Book line', bookSearch) + '</span><span class="opening-move-meta">' + highlightMatch(entry.moveText || '', bookSearch) + '</span></span><span class="opening-weight">' + escapeHtml(entry.wdlSummary || formatWdlCompact(entry.wdl)) + '</span></button>';
+				const uciLine = Array.isArray(entry.moves) ? entry.moves.join(' ') : '';
+				return '<button type="button" class="opening-eco-row opening-book-row' + (isSelected ? ' active' : '') + (isCurrent ? ' current' : '') + '" data-book-key="' + escapeHtml(entry.key || '') + '"' + (uciLine ? ' data-book-load-line="' + escapeHtml(uciLine) + '"' : '') + ' title="' + escapeHtml(entry.label || entry.familyLabel || 'Book line') + '"><span class="opening-eco">' + escapeHtml(entry.eco || '-') + '</span><span class="opening-eco-copy"><span class="opening-name">' + highlightMatch(entry.label || entry.familyLabel || 'Book line', bookSearch) + '</span><span class="opening-move-meta">' + highlightMatch(entry.moveText || '', bookSearch) + '</span></span><span class="opening-weight">' + escapeHtml(entry.wdlSummary || formatWdlCompact(entry.wdl)) + '</span></button>';
 			}).join('');
 		}
 
@@ -617,11 +624,13 @@
 			if (aliasCount) detailChips.push(renderStatChip('Aliases', String(aliasCount)));
 			if (recognized && recognized.eco === entry.eco) detailChips.push(renderStatChip('Current game', 'Matched'));
 
+			const primaryLine = lines[0] && Array.isArray(lines[0].moves) ? lines[0].moves.join(' ') : '';
 			return [
 				'<div class="opening-badge large"><span class="opening-eco">' + escapeHtml(entry.eco || '-') + '</span><span class="opening-name">' + highlightMatch(entry.name || entry.group || 'Opening', ecoSearch) + '</span><span class="opening-weight">' + escapeHtml(lines.length ? String(lines.length) + ' exact lines' : 'Code index') + '</span></div>',
 				'<div class="opening-stat-chips">' + detailChips.join('') + '</div>',
 				renderAliasMeta(entry.aliases, 'Search aliases'),
 				'<section class="opening-detail-section"><div class="opening-detail-section-title">Description</div><div class="engine-pv">' + highlightMatch(entry.description || 'No description available for this ECO code.', ecoSearch) + '</div></section>',
+				(primaryLine ? '<div class="opening-actions"><button type="button" class="play-action-btn" data-eco-load-line="' + escapeHtml(primaryLine) + '">Load Primary Line</button></div>' : ''),
 				(lines.length
 					? '<section class="opening-detail-section"><div class="opening-detail-section-title">Recorded Lines</div><div class="opening-transposition-list">' + lines.map(renderEcoLine).join('') + '</div></section>'
 					: '<div class="engine-summary-empty">This code is available in the full ECO index, but no exact move tree is stored in the current explorer book for it yet.</div>')

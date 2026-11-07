@@ -118,6 +118,8 @@ class Board3D {
         this.sceneRoot = null;
         this.sceneLoadPromise = null;
         this.sceneLoadFailed = false;
+        this._renderQueued = false;
+        this._contextLost = false;
 
         this.drag = false;
         this.prev = { x: 0, y: 0 };
@@ -192,7 +194,7 @@ class Board3D {
         this._buildBoard();
         this._bindEvents();
         this._syncSceneMode();
-        this._startLoop();
+        this._requestRender();
     }
 
     _trackBoardVisual(object3d) {
@@ -288,6 +290,7 @@ class Board3D {
         this.lastFEN = String(fen || '');
         this._clearPieces();
         this._syncSceneMode();
+        this._requestRender();
 
         if (Board3D.LOAD_STL_ASSETS && Board3D.isStauntonStyle(this.renderStyle) && !Board3D._stauntonAssetsUnavailable) {
             this._ensureStauntonAssets().then(() => {
@@ -306,7 +309,7 @@ class Board3D {
         const rows = this.lastFEN.split(' ')[0].split('/');
         for (let rank = 0; rank < 8; rank++) {
             let file = 0;
-            for (const ch of rows[rank]) {
+            for (const ch of rows[rank] || '') {
                 if (isNaN(ch)) {
                     if (this.renderStyle === 'legacy') {
                         this._spawnLegacyPiece(ch, file, rank);
@@ -332,8 +335,25 @@ class Board3D {
     _clearPieces() {
         this.pieceMeshes.forEach(mesh => {
             if (mesh && mesh.parent) mesh.parent.remove(mesh);
+            this._disposeObjectResources(mesh);
         });
         this.pieceMeshes = [];
+    }
+
+    _disposeObjectResources(object) {
+        if (!object || typeof object.traverse !== 'function') return;
+        const cachedGeometries = new Set(Board3D._stauntonGeometryCache.values());
+        object.traverse(child => {
+            if (child.geometry && !cachedGeometries.has(child.geometry)) {
+                child.geometry.dispose();
+            }
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach(material => {
+                if (!material) return;
+                if (material.map) material.map.dispose();
+                material.dispose();
+            });
+        });
     }
 
     _spawnLegacyPiece(fenChar, file, rank) {
@@ -639,6 +659,7 @@ class Board3D {
     async _ensureSceneAsset() {
         if (this.sceneRoot || this.sceneLoadFailed) {
             this._syncSceneMode();
+            this._requestRender();
             return this.sceneRoot;
         }
         if (this.sceneLoadPromise) return this.sceneLoadPromise;
@@ -649,6 +670,7 @@ class Board3D {
                 this.scene.add(root);
                 this._fitSceneRoot(root);
                 this._syncSceneMode();
+                this._requestRender();
                 return root;
             })
             .catch(error => {
@@ -846,6 +868,7 @@ class Board3D {
         mesh.position.set(file - 3.5, 0.1, rank - 3.5);
         this.scene.add(mesh);
         this.highlights.push(mesh);
+        this._requestRender();
     }
 
     _applyOrbit() {
@@ -857,6 +880,7 @@ class Board3D {
             r * Math.sin(phi) * Math.cos(theta)
         );
         this.camera.lookAt(0, 0, 0);
+        this._requestRender();
     }
 
     resetView() {
@@ -894,6 +918,7 @@ class Board3D {
         if (this.frameMesh) this.frameMesh.material.color.set(frameC);
         if (this.plinthMesh) this.plinthMesh.material.color.set(frameC.clone().multiplyScalar(0.7));
         this._updateSceneBg();
+        this._requestRender();
     }
 
     _updateSceneBg() {
@@ -906,7 +931,7 @@ class Board3D {
         this.active = true;
         this.container.style.display = 'block';
         this.resize();
-        this._startLoop();
+        this._requestRender();
     }
 
     hide() {
@@ -920,28 +945,32 @@ class Board3D {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
+        this._requestRender();
     }
 
-    _startLoop() {
-        if (this._loopRunning) return;
-        this._loopRunning = true;
-        let lastRender = 0;
-        const loop = () => {
-            if (!this.active) {
-                this._loopRunning = false;
-                return;
+    _requestRender() {
+        if (!this.active || this._renderQueued || this._contextLost) return;
+        this._renderQueued = true;
+        requestAnimationFrame(() => {
+            this._renderQueued = false;
+            if (this.active && !this._contextLost) {
+                this.renderer.render(this.scene, this.camera);
             }
-            requestAnimationFrame(loop);
-            const now = performance.now();
-            if (now - lastRender < 33) return;
-            lastRender = now;
-            this.renderer.render(this.scene, this.camera);
-        };
-        loop();
+        });
     }
 
     _bindEvents() {
         const el = this.renderer.domElement;
+        el.addEventListener('webglcontextlost', event => {
+            event.preventDefault();
+            this._contextLost = true;
+            this.active = false;
+        });
+        el.addEventListener('webglcontextrestored', () => {
+            this._contextLost = false;
+            this.active = true;
+            this._requestRender();
+        });
 
         const midpoint = touches => {
             if (!touches || touches.length < 2) return null;
@@ -1073,9 +1102,14 @@ class Board3D {
 
     destroy() {
         this.active = false;
+        this._contextLost = true;
+        this._clearPieces();
+        this.boardVisuals.forEach(mesh => this._disposeObjectResources(mesh));
         if (this.renderer) {
             this.renderer.dispose();
-            this.container.removeChild(this.renderer.domElement);
+            if (this.renderer.domElement.parentNode === this.container) {
+                this.container.removeChild(this.renderer.domElement);
+            }
         }
     }
 }

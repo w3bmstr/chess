@@ -8809,6 +8809,12 @@ if (!menuButton || !sideDrawer) {
             showView('play');
         });
     }
+    const exploreOpenings = document.querySelector('.home-secondary-action[data-view="openings"]');
+    if (exploreOpenings) {
+        exploreOpenings.addEventListener('click', function () {
+            showView('openings');
+        });
+    }
 
     // ============================
     //   THEME SWITCHING
@@ -9022,7 +9028,20 @@ function undoLastMove() {
     cancelEngineTurn();
     const controller = ensureGameController();
     if (controller) {
+        const snapshot = controller.getSnapshot();
         controller.undoLastMove();
+
+        // In a completed vs-engine turn, rewind both plies so the player gets
+        // the same position they had before making their move.
+        const history = snapshot && Array.isArray(snapshot.moveHistory) ? snapshot.moveHistory : [];
+        const lastMove = history[history.length - 1];
+        const previousMove = history[history.length - 2];
+        if (currentPlayMode === 'play'
+            && lastMove && previousMove
+            && lastMove.side === getPlayModeConfig('play').engineColors[0]
+            && previousMove.side === getPlayModeConfig('play').humanColors[0]) {
+            controller.undoLastMove();
+        }
     }
     paintPosition(currentBoardFEN);
 }

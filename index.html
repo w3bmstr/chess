@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>BitboardJS Engine</title>
+    <title>BitboardJS | Chess, reimagined</title>
     <link rel="stylesheet" href="styles.css">
     <script src="vendor/three.min.js"></script>
 </head>
@@ -13,7 +13,7 @@
     <!-- TOP NAV BAR -->
     <header id="top-nav">
         <button id="menu-button" aria-label="Open menu">☰</button>
-        <div id="logo">BitboardJS Engine</div>
+        <div id="logo"><span class="brand-mark">♞</span> BitboardJS</div>
         <button id="settings-button" aria-label="Settings">⚙</button>
     </header>
 
@@ -229,9 +229,42 @@
     <main id="content">
 
         <section id="view-home" class="view active">
-            <h1>BitboardJS Engine</h1>
-            <p>Modern JavaScript chess engine with BigInt bitboards, magic movegen, and zero-GC search.</p>
-            <button id="start-playing">Play Now</button>
+            <div class="home-shell">
+                <div class="home-hero">
+                    <div class="home-hero-copy">
+                        <span class="home-eyebrow">THE OPEN BOARD</span>
+                        <h1>Think deeper.<br><span>Play sharper.</span></h1>
+                        <p class="home-lead">A focused chess workspace for serious games, opening discovery, and engine-assisted improvement.</p>
+                        <div class="home-actions">
+                            <button id="start-playing" class="home-primary-action">Play vs Engine <span aria-hidden="true">→</span></button>
+                            <button class="home-secondary-action" data-view="openings">Explore openings</button>
+                        </div>
+                        <div class="home-trust-row">
+                            <span><i class="status-dot"></i> Engine ready</span>
+                            <span>•</span>
+                            <span>Runs in your browser</span>
+                        </div>
+                    </div>
+                    <div class="home-board-art" aria-hidden="true">
+                        <div class="home-board-glow"></div>
+                        <div class="home-mini-board">
+                            <span>♜</span><span>♞</span><span>♝</span><span>♛</span><span>♚</span><span>♝</span><span>♞</span><span>♜</span>
+                            <span>♟</span><span>♟</span><span>♟</span><span>♟</span><span>♟</span><span>♟</span><span>♟</span><span>♟</span>
+                            <span></span><span></span><span></span><span></span><span>✦</span><span></span><span></span><span></span>
+                            <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                            <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                            <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                            <span>♙</span><span>♙</span><span>♙</span><span>♙</span><span>♙</span><span>♙</span><span>♙</span><span>♙</span>
+                            <span>♖</span><span>♘</span><span>♗</span><span>♕</span><span>♔</span><span>♗</span><span>♘</span><span>♖</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="home-feature-grid">
+                    <article class="home-feature-card"><span class="home-feature-icon">◈</span><div><h2>Play your way</h2><p>Engine, local, online, and variant games in one clean workspace.</p></div></article>
+                    <article class="home-feature-card"><span class="home-feature-icon">⌁</span><div><h2>See the ideas</h2><p>Explore openings and understand every move with live analysis.</p></div></article>
+                    <article class="home-feature-card"><span class="home-feature-icon">✦</span><div><h2>Built for focus</h2><p>Fast browser-native search with no account or distractions.</p></div></article>
+                </div>
+            </div>
         </section>
 
  <section id="view-play" class="view">
